@@ -38,14 +38,41 @@ def mostrar_erro(mensagem):
 # ── Importa os painéis ────────────────────────────────────────────────────────
 st._is_running_with_vitrine = True
 
-sys.path.insert(0, str(Path(r"N:\05 - Arquivos Pessoais\Vinicius\4 - Painel_Alerta_Frequencia")))
+# Na nuvem (Streamlit Cloud) as pastas dos painéis ficam no repositório, ao lado desta.
+# Localmente, cai para as pastas do drive N:. Pastas inexistentes são ignoradas.
+_RAIZ = Path(__file__).resolve().parent.parent
+
+
+def _primeira_pasta(*candidatas):
+    for c in candidatas:
+        if c.is_dir():
+            return c
+    return None
+
+
+_PASTA_FREQ = _primeira_pasta(
+    _RAIZ / "4 - Painel_Alerta_Frequencia",
+    Path(r"N:\05 - Arquivos Pessoais\Vinicius\4 - Painel_Alerta_Frequencia"),
+)
+_PASTA_TURMA = _primeira_pasta(
+    _RAIZ / "5 - Painel_Alerta_Turma",
+    Path(r"N:\05 - Arquivos Pessoais\Vinicius\5 - Painel_Alerta_Turma"),
+)
+
+if _PASTA_FREQ:
+    sys.path.insert(0, str(_PASTA_FREQ))
 # append (e não insert) para a pasta do painel 4 manter prioridade em nomes repetidos
 # (as duas pastas têm processar.py e validacoes/; aqui só o app_turma é importado).
-sys.path.append(str(Path(r"N:\05 - Arquivos Pessoais\Vinicius\5 - Painel_Alerta_Turma")))
+if _PASTA_TURMA:
+    sys.path.append(str(_PASTA_TURMA))
 
 import app_alunos_temas
 import app_frequencia_hud
-import app_turma_hud
+
+# O painel de turmas só entra na rotação se a pasta 5 existir (ainda não está no GitHub).
+app_turma_hud = None
+if _PASTA_TURMA:
+    import app_turma_hud
 
 # ── Configuração ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -88,7 +115,7 @@ with _TRAVA:
 DURACAO_SEG = 10 * 60
 REFRESH_MS  = 30 * 1000
 
-PAINEIS = ["alunos", "freq", "turma"]
+PAINEIS = ["alunos", "freq"] + (["turma"] if app_turma_hud else [])
 LABELS  = {
     "alunos": "📊 Saúde da Base de Alunos",
     "freq":   "📅 Saúde da Base de Frequência",
@@ -258,7 +285,7 @@ try:
                 app_alunos_temas.render()
             elif painel_ativo == "freq":
                 app_frequencia_hud.render()
-            else:
+            elif painel_ativo == "turma":
                 app_turma_hud.render()
         finally:
             _restaurar_originais()
