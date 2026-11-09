@@ -4,3 +4,4 @@ streamlit-autorefresh
 pandas>=2.0
 polars>=1.0
 pyarrow>=14.0,<25
+openpyxl
