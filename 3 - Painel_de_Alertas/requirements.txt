@@ -1,21 +1,6 @@
-# Dependências do painel (Streamlit Cloud)
-# Um pacote por linha, sem marcadores de lista ("-").
-
-# Interface e gráficos
 streamlit>=1.37
 plotly>=5.24
 streamlit-autorefresh
-
-# Processamento de dados
 pandas>=2.0
 polars>=1.0
-# Limite <25: a versão 26.0.1 tem segfault conhecido (apache/arrow#50471)
 pyarrow>=14.0,<25
-
-# Biblioteca INTERNA da SEDU (não está no PyPI). Mantenha comentada,
-# senão o install falha fora da rede da SEDU.
-# pygei
-
-# Só se algum módulo exportar .xlsx:
-# xlsxwriter
-# openpyxl
