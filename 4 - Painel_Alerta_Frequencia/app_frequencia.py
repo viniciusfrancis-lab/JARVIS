@@ -8,6 +8,7 @@ TODO: substitua os blocos marcados com  # <<<  pelos dados reais
 """
 
 import base64
+import json
 from datetime import datetime
 from pathlib import Path
 import polars as pl
@@ -258,15 +259,27 @@ ANOS_LETIVOS_VALIDOS = [
 ]
 
 
+def _total_ativos_do_json():
+    """Lê Resultados/total_ativos.json (gerado pelo processar.py). None se não existir/inválido."""
+    caminho = _BASE / "Resultados" / "total_ativos.json"
+    try:
+        return int(json.loads(caminho.read_text(encoding="utf-8"))["total"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
 @st.cache_data(show_spinner=False, ttl=36000)
-def _carregar_total_ativos() -> int:
+def _total_ativos_do_parquet():
     """
+    Fallback (só roda localmente, onde o BASE_EMPILHADA.parquet existe).
     Alunos DISTINTOS com matrícula ATIVA, em turma ATIVA, nos anos letivos válidos,
-    no snapshot mais recente (dt_referencia máxima) do BASE_EMPILHADA.
-    Usado como denominador do medidor do HUD e como teto fixo do eixo X no gráfico
-    de alertas por categoria.
+    no snapshot mais recente (dt_referencia máxima). None se o parquet não existir.
     """
-    df = pl.scan_parquet(_BASE / "BDados" / "BASE_EMPILHADA.parquet")
+    caminho = _BASE / "BDados" / "BASE_EMPILHADA.parquet"
+    if not caminho.exists():
+        return None
+
+    df = pl.scan_parquet(caminho)
 
     data_ref = (
         df.select(pl.col("dt_referencia").max())
@@ -274,7 +287,7 @@ def _carregar_total_ativos() -> int:
           .item()
     )
 
-    total = (
+    return (
         df.filter(
             (pl.col("dt_referencia") == data_ref)
             & (pl.col("num_ano_letivo").is_in(ANOS_LETIVOS_VALIDOS))
@@ -285,6 +298,17 @@ def _carregar_total_ativos() -> int:
         .collect()
         .item()
     )
+
+
+def _carregar_total_ativos():
+    """
+    Total de alunos ativos: denominador do medidor do HUD e teto do eixo X no gráfico
+    de alertas por categoria. Ordem: total_ativos.json (Streamlit Cloud) -> parquet (local).
+    Devolve None se nenhuma fonte existir (o HUD mostra "—" e o gráfico usa escala automática).
+    """
+    total = _total_ativos_do_json()
+    if total is None:
+        total = _total_ativos_do_parquet()
     return total
 
 ### fim do calculo de total dos alunos da base
@@ -480,7 +504,7 @@ def render():
             xaxis=dict(
                 gridcolor="#f0f4f5", showline=False, zeroline=False,
                 tickfont=dict(color=TEXT, size=12),
-                range=[0, total_ativos],
+                range=[0, total_ativos] if total_ativos else None,
             ),
             yaxis=dict(autorange="reversed", showgrid=False, showline=False,
                        tickfont=dict(color=TEXT, size=13)),
