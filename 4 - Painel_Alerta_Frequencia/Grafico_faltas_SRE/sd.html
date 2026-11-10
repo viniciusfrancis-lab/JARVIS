@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;}
+  select.metric-sel{
+    font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:12px;
+    background:#0f1620;color:#bfe6d2;border:1px solid #2a4a3a;border-radius:5px;
+    padding:5px 10px;cursor:pointer;outline:none;
+  }
+  select.metric-sel:hover{border-color:#34a06a;}
+</style>
+</head>
+<body>
+<div style="min-height:100vh;background:#0a0f13;font-family:'Hanken Grotesk',system-ui,sans-serif;color:#e7efe9;display:flex;justify-content:center;padding:56px 32px;">
+  <div style="width:100%;max-width:1080px;background:#0f1620;border:1px solid #1d2731;border-radius:8px;box-shadow:0 24px 60px -34px rgba(0,0,0,.7);overflow:hidden;">
+
+    <!-- header banner (verde SEDU) -->
+    <div style="padding:34px 44px 30px;background:linear-gradient(105deg,#155239 0%,#1e6e4a 48%,#2f9e69 100%);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div class="mono" style="display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#bfe6d2;font-weight:500;">
+          <span style="width:18px;height:2px;background:#bfe6d2;display:inline-block;"></span>
+          Faltas Decrescentes no Tempo &middot; SEDU-ES
+        </div>
+        <select id="metricSel" class="metric-sel">
+          <option value="retroativas">Faltas Totais</option>
+          <option value="atuais">Faltas atuais</option>
+          <option value="alunos">Alunos monitorados</option>
+          <option value="reducao">Redu&ccedil;&atilde;o de faltas</option>
+        </select>
+      </div>
+      <h1 id="title" style="margin:13px 0 0;font-size:33px;line-height:1.12;font-weight:800;letter-spacing:-.018em;max-width:700px;color:#ffffff;"></h1>
+      <div style="margin-top:15px;display:flex;flex-wrap:wrap;gap:10px 26px;font-size:14px;color:#cde8db;">
+        <span><strong id="totalAlunos" class="mono" style="color:#fff;font-weight:600;"></strong> alunos monitorados</span>
+        <span><strong id="sreCount" class="mono" style="color:#fff;font-weight:600;"></strong> superintend&ecirc;ncias regionais</span>
+        <span><strong id="totalMetric" class="mono" style="color:#fff;font-weight:600;"></strong> <span id="metricUnit"></span> no total</span>
+      </div>
+    </div>
+
+    <!-- section label -->
+    <div class="mono" style="padding:26px 44px 4px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#5f9079;font-weight:600;">
+      Ranking por SRE
+    </div>
+
+    <!-- chart -->
+    <div id="chart" style="padding:8px 44px 16px;"></div>
+
+    <!-- footer / legend -->
+    <div style="padding:18px 44px 34px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;align-items:center;">
+      <div id="legend" style="display:flex;flex-wrap:wrap;gap:18px;font-size:10px;color:#8a9893;align-items:center;"></div>
+      <div id="note" class="mono" style="font-size:11.5px;color:#566461;text-align:right;max-width:380px;"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Dados reais do arquivo faltas_decrescentes.parquet (13.398 alunos) ───────
+const DATA = [
+  { sre:"SRE CARAPINA",                       n:2105, fa:100831, fat:56429 },
+  { sre:"SRE VILA VELHA",                     n:1903, fa:95872, fat:72457 },
+  { sre:"SRE CACHOEIRO DE ITAPEMIRIM",        n:2111, fa:83343, fat:50452 },
+  { sre:"SRE COLATINA",                       n:1040, fa:53306, fat:42455 },
+  { sre:"SRE LINHARES",                       n:964,  fa:40406, fat:35152 },
+  { sre:"SRE SAO MATEUS",                     n:1033, fa:36518, fat:30633 },
+  { sre:"SRE BARRA DE SAO FRANCISCO",         n:605,  fa:33190, fat:28517 },
+  { sre:"SRE CARIACICA",                      n:893,  fa:37177, fat:29887 },
+  { sre:"SRE COMENDADORA JUREMA MORETZ SOHN", n:590,  fa:26277, fat:19701 },
+  { sre:"SRE AFONSO CLAUDIO",                 n:732,  fa:22695, fat:16019 },
+  { sre:"SRE NOVA VENECIA",                   n:410,  fa:12964, fat:10707 },
+];
+
+const accent = "#34a06a";
+const accentSoft = "#2f6b50";
+const fmt = (n) => n.toLocaleString("pt-BR");
+
+const META = {
+  retroativas: { title:"SRE com maiores faltas ",        unit:"faltas Totais", legend:"Faltas no per\u00edodo anterior (retroativas)", val:(r)=>r.fa },
+  atuais:      { title:"SRE com maiores faltas no per\u00edodo atual", unit:"faltas atuais",     legend:"Faltas no per\u00edodo atual",                  val:(r)=>r.fat },
+  alunos:      { title:"SRE com mais alunos em faltas decrescentes", unit:"alunos",             legend:"Alunos monitorados",                            val:(r)=>r.n },
+  reducao:     { title:"SRE com maior redu\u00e7\u00e3o de faltas",   unit:"faltas reduzidas",   legend:"Redu\u00e7\u00e3o de faltas (retroativas \u2212 atuais)", val:(r)=>(r.fa - r.fat) },
+};
+
+const NOTE = 'Fonte: monitoramento de frequ\u00eancia \u00b7 alerta \u201cFaltas Decrescentes no Tempo\u201d. ' +
+             'Faltas retroativas = total acumulado no per\u00edodo de refer\u00eancia anterior.';
+
+const esc = (s) => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function render(metric){
+  const m = META[metric] || META.retroativas;
+  const showCurrent = metric === "retroativas";
+  const sorted = [...DATA].sort((a,b)=> m.val(b) - m.val(a));
+  const max = m.val(sorted[0]) || 1;
+  const totalMetric = sorted.reduce((s,r)=>s+m.val(r),0);
+
+  document.getElementById("title").textContent       = m.title;
+  document.getElementById("totalAlunos").textContent = fmt(DATA.reduce((s,r)=>s+r.n,0));
+  document.getElementById("sreCount").textContent    = DATA.length;
+  document.getElementById("totalMetric").textContent = fmt(totalMetric);
+  document.getElementById("metricUnit").textContent  = m.unit;
+  document.getElementById("note").textContent        = NOTE;
+
+  const rowsHtml = sorted.map((r,i)=>{
+    const v = m.val(r);
+    const drop = r.fa > 0 ? Math.round((r.fa - r.fat) / r.fa * 100) : 0;
+    let deltaFmt;
+    if (metric === "retroativas" || metric === "atuais") deltaFmt = "\u2193 " + drop + "% no per\u00edodo";
+    else if (metric === "reducao") deltaFmt = "\u2193 " + drop + "% vs. retroativas";
+    else deltaFmt = fmt(r.fa) + " faltas retro.";
+
+    const rank   = String(i+1).padStart(2,"0");
+    const name   = r.sre.replace(/^SRE\s+/,"");
+    const pct    = (v / max * 100);
+    const curPct = (r.fat / max * 100);
+
+    const curBar = showCurrent ? `
+      <div style="height:8px;background:#18222c;border-radius:2px;overflow:hidden;">
+        <div style="height:100%;border-radius:2px;width:${curPct}%;background:${accentSoft};"></div>
+      </div>` : "";
+
+    return `
+      <div style="display:flex;align-items:center;gap:18px;padding:13px 0;border-bottom:1px solid #18212b;">
+        <div style="width:268px;flex:none;display:flex;align-items:baseline;gap:12px;">
+          <span class="mono" style="font-size:13px;font-weight:500;color:#4a5a5f;width:22px;flex:none;">${rank}</span>
+          <span style="display:flex;flex-direction:column;gap:2px;min-width:0;">
+            <span style="font-size:15.5px;font-weight:700;letter-spacing:-.01em;line-height:1.15;color:#eef4f0;">${esc(name)}</span>
+            <span class="mono" style="font-size:11px;color:#6c7a76;letter-spacing:.04em;">${fmt(r.n)} alunos</span>
+          </span>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;">
+          <div style="height:18px;background:#18222c;border-radius:3px;overflow:hidden;position:relative;">
+            <div style="height:100%;border-radius:3px;width:${pct}%;background:${accent};transition:width .5s cubic-bezier(.22,1,.36,1);"></div>
+          </div>
+          ${curBar}
+        </div>
+        <div style="width:148px;flex:none;text-align:right;">
+          <div class="mono" style="font-size:19px;font-weight:600;letter-spacing:-.01em;color:#57c08a;">${fmt(v)}</div>
+          <div style="font-size:11.5px;color:#6c9b83;font-weight:600;margin-top:1px;">${deltaFmt}</div>
+        </div>
+      </div>`;
+  }).join("");
+  document.getElementById("chart").innerHTML = rowsHtml;
+
+  const legendCur = showCurrent ? `
+    <span style="display:flex;align-items:center;gap:7px;">
+      <span style="width:22px;height:9px;border-radius:2px;background:${accentSoft};display:inline-block;"></span>Faltas no per\u00edodo atual
+    </span>` : "";
+  document.getElementById("legend").innerHTML = `
+    <span style="display:flex;align-items:center;gap:7px;">
+      <span style="width:22px;height:9px;border-radius:2px;background:${accent};display:inline-block;"></span>${m.legend}
+    </span>${legendCur}`;
+}
+
+document.getElementById("metricSel").addEventListener("change", (e)=> render(e.target.value));
+render("retroativas");
+</script>
+</body>
+</html>
