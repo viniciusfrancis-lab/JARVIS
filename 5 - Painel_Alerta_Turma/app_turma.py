@@ -45,7 +45,13 @@ HEAT_SCALE = [[0.0, TEAL_LIGHT], [0.5, TEAL_MID], [1.0, TEAL_DARK]]
 HEAT_TXT   = (TEXT, "#ffffff")  # cor do número em célula clara / célula escura
 
 # CSV (id_turma, disciplina, nm_docente) que alimenta a seção "disciplinas × docentes por turma"
-CAMINHO_BASE_DISC_DOC = Path(r"N:\05 - Arquivos Pessoais\Vinicius\5 - Painel_Alerta_Turma\grafico\base.csv")
+# Procura primeiro ao lado deste arquivo (funciona no Streamlit Cloud / GitHub), depois no caminho local da rede.
+_CANDIDATOS_BASE = [
+    Path(__file__).resolve().parent / "base.csv",
+    Path(__file__).resolve().parent / "grafico" / "base.csv",
+    Path(r"N:\05 - Arquivos Pessoais\Vinicius\5 - Painel_Alerta_Turma\grafico\base.csv"),
+]
+CAMINHO_BASE_DISC_DOC = next((c for c in _CANDIDATOS_BASE if c.exists()), _CANDIDATOS_BASE[0])
 
 # ── Ícones por tipo de alerta de turma ────────────────────────────────────────
 ALERTA_ICON_TURMA = {
@@ -374,7 +380,7 @@ def _secao_disc_doc():
     st.markdown('<p class="freq-section-title" style="margin-top:1.5rem;">disciplinas × docentes por turma</p>',
                 unsafe_allow_html=True)
     if not CAMINHO_BASE_DISC_DOC.exists():
-        st.info(f"Base não encontrada: {CAMINHO_BASE_DISC_DOC}")
+        st.info("Base não encontrada. Coloque o arquivo base.csv na mesma pasta do app_turma.py no repositório (ou em grafico/base.csv).")
         return
     mtime = CAMINHO_BASE_DISC_DOC.stat().st_mtime
     g = _carregar_disc_doc_por_turma(mtime)
